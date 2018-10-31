@@ -11,7 +11,11 @@ import zlib
 from collections import defaultdict
 
 class DataStream(threading.Thread):
-	def __init__(self, ip, path, checksum, size):
+	def __init__(self, ip, path, checksum, size, upload=False, download=False):
+
+		if not upload and not download:
+			raise ValueError("DataStream must be initialized with either download or upload specified.")
+
 		threading.Thread.__init__(self)
 
 		self.ip = ip
@@ -28,13 +32,40 @@ class DataStream(threading.Thread):
 		self.checksum = checksum
 		self.size = size
 
+		self.upload = upload
+		self.download = download
+
 		print('DATASTREAM:\tSocket for {} to send {} path launched on port {}'.format(self.ip, self.path, self.port))
 
 	def stop(self, ret = False):
 		self.c.close()
 		return ret
 
-	def run(self):
+	def run_download(self):
+		while True:
+			c, addr = self.s.accept()
+			c.settimeout(10)
+
+			if addr[0] != self.ip:
+				print('DATASTREAM:\tData stream for {} was used by {}, breaking connection.'.format(self.ip, addr[0]))
+				c.close()
+			else:
+				break
+
+		self.c = c
+
+		with open(self.path, 'rb') as f:
+			while True:
+				buf = f.read(1024)
+
+				if not buf:
+					break
+
+				self.c.sendall(buf)
+
+		self.c.close()
+
+	def run_upload(self):
 		while True:
 			c, addr = self.s.accept()
 			c.settimeout(10)
@@ -49,7 +80,7 @@ class DataStream(threading.Thread):
 		remaining_size = self.size
 		recv_checksum = 0
 
-		with tempfile.NamedTemporaryFile() as file:
+		with tempfile.NamedTemporaryFile() as source:
 			while True:
 				buf = self.c.recv(1024)
 				
@@ -64,8 +95,8 @@ class DataStream(threading.Thread):
 					return self.stop()
 
 				recv_checksum = zlib.crc32(buf, recv_checksum)
-				file.write(buf)
-				file.flush()
+				source.write(buf)
+				source.flush()
 
 				if remaining_size == 0:
 					print('DATASTREAM:\tCorrect size received.')
@@ -79,11 +110,22 @@ class DataStream(threading.Thread):
 				print('DATASTREAM:\tChecksum {} does not match sender-specified checksum {}.'.format(recv_checksum, self.checksum))
 				return self.stop()
 
-			shutil.copy(file.name, self.path)
+			with open(self.path, 'wb') as dest:
+				source.seek(0)
+				shutil.copyfileobj(source, dest)
 
-		print('DATASTREAM:\t Temporary file {} has been successfully copied to {}.'.format(file.name, self.path))
+		print('DATASTREAM:\t Temporary file {} has been successfully copied to {}.'.format(source.name, self.path))
 		print('DATASTREAM:\t Closing data stream.')
 		return self.stop(True)
+
+	def run(self):
+		if self.upload:
+			return self.run_upload()
+		
+		if self.download:
+			return self.run_download()
+
+		return None
 
 class MessageStream(threading.Thread):
 	def __init__(self, c):
@@ -193,7 +235,7 @@ class MessageStream(threading.Thread):
 			return False
 
 		ip = self.addr[0]
-		data_stream = DataStream(ip, route, checksum, size)
+		data_stream = DataStream(ip, route, checksum, size, upload=True)
 		data_stream.start()
 
 		resp = {"response": 200, "port": data_stream.port}
@@ -201,8 +243,49 @@ class MessageStream(threading.Thread):
 
 		return True
 
-	def get():
-		pass
+	def get(self, req):
+		try:
+			route = req["path"].lower()
+		except:
+			self.error(400, "Required arguments missing (route must be supplied).")
+			return False
+
+		route = route.lstrip(os.path.sep)
+		route = os.path.join(Server.ROOT_PATH, route)
+		route = os.path.realpath(route)
+
+		if not route.startswith(Server.ROOT_PATH):
+			self.error(403, "I do not take kindly to your jailbreak attempt.")
+			return False
+		
+		try:
+			size = os.path.getsize(route)
+
+			with open(route, "rb") as f:
+				checksum = 0
+				while True:
+					buf = f.read(1024)
+
+					if not buf:
+						break
+					checksum = zlib.crc32(buf, checksum)
+
+			checksum = "%X" % (checksum & 0xFFFFFFFF)
+
+		except IOError:
+			self.error(404, "File at path does not exist.")
+			return False
+
+
+		ip = self.addr[0]
+		data_stream = DataStream(ip, route, checksum, size, download=True)
+		data_stream.start()
+
+		resp = {"response": 200, "port": data_stream.port, "size": size, "checksum": checksum}
+		self.send(resp)
+
+		return True
+
 
 	def error(self, code, msg = None):
 		if not msg:
