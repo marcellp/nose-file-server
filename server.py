@@ -23,7 +23,7 @@ class DataStream(threading.Thread):
 
 		self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		self.s.bind(("0.0.0.0", 4000))
+		self.s.bind(("0.0.0.0", 0))
 		self.s.listen(1)
 
 		self.port = self.s.getsockname()[1]
@@ -119,11 +119,15 @@ class DataStream(threading.Thread):
 		return self.stop(True)
 
 	def run(self):
-		if self.upload:
-			return self.run_upload()
-		
-		if self.download:
-			return self.run_download()
+		try:
+			if self.upload:
+				return self.run_upload()
+			
+			if self.download:
+				return self.run_download()
+		finally:
+			if self.c:
+				self.c.close()
 
 		return None
 
