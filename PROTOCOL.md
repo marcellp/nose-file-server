@@ -124,4 +124,4 @@ The client can be run with any of the following commands
 
 ``HOSTNAME`` denotes the IP address of the system running the server implementation.
 
-``<>`` denotes an optional arguement. In the case of ``list`` the default directory of the server's file path will be returned. In the case of ``get`` and ``put`` ``LOCAL_FILENAME`` the filename of the non-optional arguement will be used.
+``<>`` denotes an optional arguement. In the case of ``list`` the default directory of the server's file path will be returned. In the case of ``get`` and ``put`` the filename of the non-optional arguement will be used.
