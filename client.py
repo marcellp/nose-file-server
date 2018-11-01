@@ -3,6 +3,9 @@ import json
 import socket
 import os
 import zlib
+import tempfile
+import shutil
+
 
 
 class Client:
@@ -10,7 +13,7 @@ class Client:
     def __init__(self, args):
         """
             args[0],args[1] : ip,port number
-            args[2],args[3] : request type,parameter
+            args[2],args[3] : request type,parameter(s)
         """
 
         self.requests = {"put": self.format_put,
@@ -28,7 +31,7 @@ class Client:
         fail_state = False
 
         if len(args) < 3 or len(args) > 5:
-            print("Unrecognised argument length")
+            print("ERROR: ARG LENGTH\n\tEXPECTED [3,4]\n\tGOT: {}".format(len(args)))
             sys.exit() #prevent an out of bounds
 
 
@@ -39,7 +42,7 @@ class Client:
         if args[1].isdigit():
            self.port = int(args[1])
         else:
-           print("Port number not recognised:\n"
+           print("ERROR: PORT NUMBER\n"
                   "\tEXPECTED INTEGER GOT \"{}\" ".format(args[1]))
            fail_state = True
 
@@ -75,7 +78,7 @@ class Client:
         print(args)
         if args == [""]:
             print("usage; put [filename] (remote filename)")
-            return False
+            return None
 
         try:
             file_size = os.path.getsize(args[0])
@@ -96,13 +99,11 @@ class Client:
         # this should be a port number
         response = self.send_request(payload)
         print(response)
-        print("hello")
 
         if not response:
 
             return None
 
-        #file_transfer = self.socket_factory(port=response["port"])
         self.send_file(args[0], port=response["port"])
 
 
@@ -110,6 +111,8 @@ class Client:
         pass
 
     def compute_checksum(self,file):
+        """utility for verifying file integrity"""
+
         crc_checksum = 0
         for line in file:
             crc_checksum = zlib.crc32(line, crc_checksum)
@@ -118,19 +121,73 @@ class Client:
 
     def format_get(self, args):
         """returns a formatted get request as json"""
+        if len(args) != 2:
+            print("EXPECTED target and dest file\nGOT: {}".format(", ".join(args)))
+
+
 
         payload = {"command":"get","path":args[0]}
         payload = json.dumps(payload) + "\x00"
+
+
         response = self.send_request(payload)
 
-        if response:
-            #download the file
-            pass
+        if not response:
+            return None
+        filepath = args[1]
+        self.receive_file(response, filepath)
 
-        pass
+    def receive_file(self,response,filepath):
+
+        connection = self.socket_factory(port=response["port"])
+
+        size = int(response["size"])
+        checksum = response["checksum"].lower()
+        recv_checksum = 0
+
+        with tempfile.NamedTemporaryFile() as file:
+            while True:
+                buf = connection.recv(1024)
+
+                if not buf:
+                    #will be triggered on null response
+                    print('Connection to server was closed')
+                    connection.close()
+                    return
+
+                size -= len(buf)
+
+                if size < 0:
+                    print('DATASTREAM:\tMaximum size exceeded, connection dropped.')
+                    connection.close()
+                    return
+
+                recv_checksum = zlib.crc32(buf, recv_checksum)
+                file.write(buf)
+                file.flush()
+
+                if size == 0:
+                    print('DATASTREAM:\tCorrect size received.')
+                    connection.close()
+                    break
+
+            #compute a checksum on only part of the data
+            recv_checksum = "%X" % (recv_checksum & 0xFFFFFFFF)
+            recv_checksum = recv_checksum.lower()
+
+            if recv_checksum != checksum:
+                print('DATASTREAM:\tChecksum {} does not match sender-specified checksum {}.'
+                      .format(recv_checksum,checksum))
+                connection.close()
+                return None
+
+            #commit to non temporary file
+            file.seek(0)
+            with open(filepath,"wb") as dest_file:
+                shutil.copyfileobj(file,dest_file)
 
     def format_list(self, args):
-        """returns a formatted list request as json"""
+        """formats and sends list request"""
 
         if not args:
             args.append("/")
@@ -140,13 +197,13 @@ class Client:
         response = self.send_request(payload)
         print("\n\n")
         if response:
-            print("response for path:\"", args[0], "\"")
+            print("RESPONSE:\"", args[0], "\"")
             for dir in response["dirs"]:
                 print("<DIR> ".rjust(10, ' '), dir)
             for file in response["files"]:
                 print("<FILE> ".rjust(10, ' '), file)
-
-        return True
+            return True
+        return None
 
     def send_file(self,file_name,ip=None, port = None):
 
@@ -158,7 +215,7 @@ class Client:
                 send_socket.sendall(buffer)
                 if not buffer:
                     break
-        print("File has been sent to host (IP){} (PORT){}".format(self.server_id,self.port))
+        print("REQUEST SENT (IP){} (PORT){}".format(self.server_id,self.port))
 
         pass
 
@@ -166,19 +223,20 @@ class Client:
         """standard method for sending request, returns the response to the calling method"""
 
         client_socket = self.socket_factory()
-
         if not client_socket:
-            print("An error occured while trying to connect to the host")
+            print("ERROR: connection to host failed")
             sys.exit()
 
         client_socket.sendall(payload.encode("utf-8"))
-        print(payload, " sent waiting for response...")
+        print("REQUEST: SENT",payload)
 
         nullPresent = False
         response = b""
 
         while not nullPresent:
             response += client_socket.recv(1024)
+            if not response:
+                return None
             if response[-1] == 0:
                 nullPresent = True
 
@@ -188,7 +246,7 @@ class Client:
 
         if response["response"] != 200:
             self.error_handler(response)
-            return False
+            return None
 
         return response
 
@@ -196,12 +254,14 @@ class Client:
         print("Error code: ", response["response"])
         print("\t", response["error"])
 
-        pass
+        return None
+
+
+
 
 
 if __name__ == "__main__":
+    #filter off filename
     client_obj = Client(sys.argv[1:])
 
-# do validation not in main but somewhere in the actual object###
-# use format methods to send all the thingies out of one function
-# have a look at parsing filenames etc, make sure that this is safe and cannot leak outside
+
