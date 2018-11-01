@@ -1,3 +1,6 @@
+Marcell Pék:
+Myles Lamb: 2325727L
+
 Mixed-State File Transfer Protocol
 ==================================
 
@@ -105,10 +108,20 @@ As for the implementations, the server uses Python threading so it can provide s
 
 Running the reference implementation
 ------------------------------------
-
+### Server
 The server can be run by
 
 ``python3 server.py PORT``
 
 where PORT is the transport layer address of the service being used.
 
+### Client
+The client can be run with any of the following commands
+
+* ``python3 server.py HOSTNAME PORT list <PATH>``  
+* ``python3 server.py HOSTNAME PORT get LOCAL_FILENAME <REMOTE_FILENAME>``
+* ``python3 server.py HOSTNAME PORT put REMOTE_FILENAME <LOCAL_FILENAME>``
+
+``HOSTNAME`` denotes the IP address of the system running the server implementation.
+
+``<>`` denotes an optional arguement. In the case of ``list`` the default directory of the server's file path will be returned. In the case of ``get`` and ``put`` ``LOCAL_FILENAME`` the filename of the non-optional arguement will be used.
