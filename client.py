@@ -13,7 +13,7 @@ class Client:
     def __init__(self, args):
         """
             args[0],args[1] : ip,port number
-            args[2],args[3] : request type,parameter(s)
+            args[2],args[3:] : request type,parameter(s)
         """
 
         self.requests = {"put": self.format_put,
@@ -64,9 +64,8 @@ class Client:
         if not port:
             port = self.port
 
-        print("attempt connection on: (IP) {} (Port) {}".format(server,port), end="\n\n")
+        print("\nattempt connection on: (IP) {} (Port) {}".format(server,port), end="\n\n")
         cli_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cli_sock.settimeout(0.1)
         try:
             cli_sock.connect((server, port))
         except:
@@ -74,41 +73,41 @@ class Client:
         return cli_sock
 
     def format_put(self, args):
-        """returns a formatted put request as json"""
-        print(args)
+        """formats and sends a put request"""
+
         if args == [""]:
             print("usage; put [filename] (remote filename)")
             return None
 
+        if len(args) != 2:
+            dest_path = args[0]
+        else:
+            dest_path = args[1]
+
         try:
             file_size = os.path.getsize(args[0])
-            print(file_size)
+
         except:
-            print("The requested file could not be found")
+            print("ERROR: the requested file could not be found on client system")
             return None
 
 
         with open(args[0], "rb") as f:
             crc_checksum = self.compute_checksum(f)
-            print(crc_checksum)
 
         #arrange for the file to be transferred
-        payload = {"command": "put", "path": args[0],"checksum":crc_checksum,"size":file_size}
+        payload = {"command": "put", "path":dest_path,"checksum":crc_checksum,"size":file_size}
         payload = json.dumps(payload) + "\x00"
 
-        # this should be a port number
+        #port number for file transfer contained here
         response = self.send_request(payload)
-        print(response)
 
         if not response:
-
+            #null response from server
             return None
 
         self.send_file(args[0], port=response["port"])
 
-
-
-        pass
 
     def compute_checksum(self,file):
         """utility for verifying file integrity"""
@@ -121,20 +120,23 @@ class Client:
 
     def format_get(self, args):
         """returns a formatted get request as json"""
+
+        #extract remote filename from request, tolerates trailing slash
         if len(args) != 2:
-            print("EXPECTED target and dest file\nGOT: {}".format(", ".join(args)))
-
-
+            levels = [x for x in args[0].split("\\") if x]
+            filepath = levels[-1]
+        else:
+            filepath = args[1]
 
         payload = {"command":"get","path":args[0]}
         payload = json.dumps(payload) + "\x00"
-
 
         response = self.send_request(payload)
 
         if not response:
             return None
-        filepath = args[1]
+
+
         self.receive_file(response, filepath)
 
     def receive_file(self,response,filepath):
@@ -175,34 +177,47 @@ class Client:
             recv_checksum = "%X" % (recv_checksum & 0xFFFFFFFF)
             recv_checksum = recv_checksum.lower()
 
+            connection.close()
+
             if recv_checksum != checksum:
                 print('DATASTREAM:\tChecksum {} does not match sender-specified checksum {}.'
                       .format(recv_checksum,checksum))
-                connection.close()
                 return None
 
             #commit to non temporary file
             file.seek(0)
-            with open(filepath,"wb") as dest_file:
-                shutil.copyfileobj(file,dest_file)
+            try:
+                with open(filepath,"wb") as dest_file:
+                    shutil.copyfileobj(file,dest_file)
+            except:
+                print("ERROR: check filepath {}".format(filepath))
 
     def format_list(self, args):
         """formats and sends list request"""
 
         if not args:
-            args.append("/")
+            args.append("\\")
         payload = {"command": "list", "path": args[0]}
         payload = json.dumps(payload) + "\x00"
-
         response = self.send_request(payload)
+
         print("\n\n")
-        if response:
+
+        if not response:
+            print("ERROR: server failed to respond")
+            return None
+
+        #request succesful
+        if response["response"] == 200:
             print("RESPONSE:\"", args[0], "\"")
             for dir in response["dirs"]:
                 print("<DIR> ".rjust(10, ' '), dir)
             for file in response["files"]:
                 print("<FILE> ".rjust(10, ' '), file)
             return True
+        else:
+            self.error_handler(response)
+
         return None
 
     def send_file(self,file_name,ip=None, port = None):
@@ -217,7 +232,6 @@ class Client:
                     break
         print("REQUEST SENT (IP){} (PORT){}".format(self.server_id,self.port))
 
-        pass
 
     def send_request(self, payload):
         """standard method for sending request, returns the response to the calling method"""
@@ -236,6 +250,7 @@ class Client:
         while not nullPresent:
             response += client_socket.recv(1024)
             if not response:
+                client_socket.close()
                 return None
             if response[-1] == 0:
                 nullPresent = True
@@ -244,6 +259,8 @@ class Client:
         response = response[:-1].decode("utf-8")
         response = json.loads(response)
 
+        client_socket.close()
+
         if response["response"] != 200:
             self.error_handler(response)
             return None
@@ -251,14 +268,12 @@ class Client:
         return response
 
     def error_handler(self, response):
-        print("Error code: ", response["response"])
-        print("\t", response["error"])
+        """standard output method for displaying errors from server"""
+
+        print("ERROR CODE: ", response["response"])
+        print("TEXT:", response["error"],end="\n\n")
 
         return None
-
-
-
-
 
 if __name__ == "__main__":
     #filter off filename
