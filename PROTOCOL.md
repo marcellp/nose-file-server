@@ -1,8 +1,7 @@
-Marcell Pék: 2333134P  
-Myles Lamb: 2325727L
-
 Mixed-State File Transfer Protocol
 ==================================
+
+*by Marcell Pek (2333134P) and Myles Lamb (2325727L)*
 
 This is the official specification for the Mixed-State File Transfer Protocol (MSFTP). A reference client and server implementation has been provided for this protocol.
 
@@ -32,6 +31,8 @@ Terminology
 * **message**: a message sent through the message exchange connection;
 * **file**: data that is to be exchanged between the client and the server through the data exchange connection;
 * **user**: a person wishing to obtain file exchange services from a server providing MSFTP services.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.
 
 Model
 -----
@@ -76,7 +77,7 @@ The response for this request, if successful, MUST contain a ``files`` and ``dir
 
 ### put
 
-The sender of this command indicates that it wishes to send a file to the service. A request of this type MUST contain the property ``path``, ``checksum`` and ``size``. ``path`` MUST be a JSON string and MUST contain a relative URI as defined by RFC 3986, and contains the path to the file to be sent to the service. ``size`` MUST be a JSON integer corresponding to the size of the file to be transferred in bytes. ``checksum`` MUST be a JSON string corresponding to the big-endian hexadecimal representation of the file's CRC-32 checksum standard defined in ITU-T V.42.
+The sender of this command indicates that it wishes to send a file to the service. A request of this type MUST contain the property ``path``, ``checksum`` and ``size``. ``path`` MUST be a JSON string and MUST contain a relative URI as defined by RFC 3986, and contains the path to the file to be sent to the service. ``size`` MUST be a JSON integer corresponding to the size of the file to be transferred in bytes. ``checksum`` MUST be a JSON string corresponding to the big-endian hexadecimal representation of the file's CRC-32 checksum as defined in ITU-T V.42. ``checksum`` as a string SHOULD consist of upper case characters.
 
 The response for this request, if successful, MUST contain a ``port`` property, which MUST correspond to an open TCP port at the server's current network address, which the client can connect to and write the contents of the file to.
 
@@ -84,7 +85,7 @@ The response for this request, if successful, MUST contain a ``port`` property, 
 
 The sender of this command indicates it wishes to retrieve a file from the service. A request of this type MUST contain the property ``path``. ``path`` MUST be a JSON string and MUST contain a relative URI as defined by RFC 3986, and contains the path to the file on the server that is to be sent to the client.
 
-The response for this request, if successful, MUST contain a ``port``, ``size`` and ``checksum``. property. ``port``  MUST correspond to an open TCP port at the server's current network address, which the client can connect to and read the contents of the file from. ``size`` MUST be a JSON integer corresponding to the size of the file to be transferred in bytes. ``checksum`` MUST be a JSON string corresponding to the big-endian hexadecimal representation of the file's CRC-32 checksum standard defined in ITU-T V.42.
+The response for this request, if successful, MUST contain a ``port``, ``size`` and ``checksum``. property. ``port``  MUST correspond to an open TCP port at the server's current network address, which the client can connect to and read the contents of the file from. ``size`` MUST be a JSON integer corresponding to the size of the file to be transferred in bytes. ``checksum`` MUST be a JSON string corresponding to the big-endian hexadecimal representation of the file's CRC-32 checksum as defined in ITU-T V.42. ``checksum`` as a string SHOULD consist of upper case characters.
 
 Data-exchange connection
 ------------------------
