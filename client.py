@@ -120,6 +120,9 @@ class Client:
 
     def format_get(self, args):
         """returns a formatted get request as json"""
+        if args == [""]:
+            print("usage; put [remote filename] (filename)")
+            return None
 
         #extract remote filename from request, tolerates trailing slash
         if len(args) != 2:
@@ -204,7 +207,6 @@ class Client:
         print("\n\n")
 
         if not response:
-            print("ERROR: server failed to respond")
             return None
 
         #request succesful
@@ -260,6 +262,8 @@ class Client:
         response = json.loads(response)
 
         client_socket.close()
+        if not response:
+            print("ERROR: server failed to respond")
 
         if response["response"] != 200:
             self.error_handler(response)
