@@ -135,6 +135,7 @@ class Client:
         payload = json.dumps(payload) + "\x00"
 
         response = self.send_request(payload)
+        #response should contain a port number to receive file
 
         if not response:
             return None
