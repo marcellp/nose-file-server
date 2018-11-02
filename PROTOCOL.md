@@ -118,9 +118,9 @@ where PORT is the transport layer address of the service being used.
 ### Client
 The client can be run with any of the following commands
 
-* ``python3 server.py HOSTNAME PORT list <PATH>``  
-* ``python3 server.py HOSTNAME PORT get LOCAL_FILENAME <REMOTE_FILENAME>``
-* ``python3 server.py HOSTNAME PORT put REMOTE_FILENAME <LOCAL_FILENAME>``
+* ``python3 Client.py HOSTNAME PORT list <PATH>``  
+* ``python3 Client.py HOSTNAME PORT get LOCAL_FILENAME <REMOTE_FILENAME>``
+* ``python3 Client.py HOSTNAME PORT put REMOTE_FILENAME <LOCAL_FILENAME>``
 
 ``HOSTNAME`` denotes the IP address of the system running the server implementation.
 
